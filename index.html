@@ -1,573 +1,1741 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Snake — GPT-5 Mini</title>
-<style>
-  :root{
-    --bg:#0f1724;
-    --panel:#0b1220;
-    --accent:#22c55e;
-    --muted:#94a3b8;
-    --danger:#ef4444;
-    --glass: rgba(255,255,255,0.04);
-    --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{
-    margin:0;
-    background:linear-gradient(180deg,var(--bg),#071022 120%);
-    color:#e6eef8;
-    font-family:var(--font);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:20px;
-    -webkit-font-smoothing:antialiased;
-  }
-
-  .app {
-    width: min(900px, 96vw);
-    display: grid;
-    grid-template-columns: 1fr 320px;
-    gap:20px;
-    align-items:start;
-  }
-
-  @media (max-width:900px){
-    .app{grid-template-columns: 1fr; max-width:480px;}
-  }
-
-  .board-card{
-    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-    border-radius:12px;
-    padding:16px;
-    box-shadow: 0 8px 30px rgba(2,6,23,0.7), inset 0 1px 0 rgba(255,255,255,0.02);
-  }
-
-  .canvas-wrap{
-    position:relative;
-    width:100%;
-    padding-top:100%; /* square */
-    border-radius:10px;
-    overflow:hidden;
-    background:var(--panel);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-  }
-
-  canvas{
-    position:absolute;
-    inset:12px;
-    width:calc(100% - 24px);
-    height:calc(100% - 24px);
-    background: linear-gradient(180deg, #071526, #04111a);
-    border-radius:8px;
-    display:block;
-  }
-
-  .hud{
-    display:flex;
-    gap:12px;
-    margin-top:12px;
-    align-items:center;
-    justify-content:space-between;
-  }
-
-  .pill{background:var(--glass); padding:8px 12px; border-radius:999px; color:var(--muted); font-weight:600; font-size:14px}
-  .score{color:var(--accent); font-weight:700; font-size:18px}
-
-  .side {
-    width:100%;
-    max-width:320px;
-    display:flex;
-    flex-direction:column;
-    gap:12px;
-  }
-
-  .panel{
-    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-    border-radius:12px;
-    padding:14px;
-  }
-
-  .title{font-size:18px; font-weight:700; margin:0 0 6px 0}
-  .muted{color:var(--muted); font-size:13px}
-
-  .controls{
-    display:grid;
-    gap:8px;
-    margin-top:8px;
-    grid-template-columns:1fr 1fr;
-  }
-
-  button{
-    border:0;
-    background:rgba(255,255,255,0.03);
-    color:inherit;
-    padding:10px;
-    border-radius:8px;
-    cursor:pointer;
-    font-weight:600;
-  }
-  button:active{transform:translateY(1px)}
-  .danger{background:linear-gradient(90deg,var(--danger),#de6b6b); color:white}
-
-  .footer{
-    margin-top:10px;
-    font-size:13px;
-    color:var(--muted);
-  }
-
-  .center{display:flex; align-items:center; justify-content:center}
-  .big{
-    width:100%;
-    height:54px;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    border-radius:10px;
-    gap:4px;
-  }
-</style>
-</head>
-<body>
-  <div class="app">
-    <div class="board-card">
-      <div style="display:flex; align-items:center; justify-content:space-between;">
-        <div>
-          <div style="font-weight:800; font-size:20px">Snake</div>
-          <div class="muted" style="margin-top:4px">Eat food • Grow • Don't hit the walls or yourself</div>
-        </div>
-        <div style="text-align:right">
-          <div class="pill score" id="score">Score: 0</div>
-          <div class="muted" style="font-size:12px; margin-top:6px">High: <span id="hi">0</span></div>
-        </div>
-      </div>
-
-      <div class="canvas-wrap" id="touch-area">
-        <canvas id="game" width="600" height="600"></canvas>
-      </div>
-
-      <div class="hud">
-        <div class="pill" id="speedPill">Speed: 6</div>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <div class="pill muted" id="statePill">Running</div>
-          <div style="font-size:12px; color:var(--muted)">Controls: ←↑→↓ / WASD • Space pause • R restart</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="side">
-      <div class="panel">
-        <div class="title">How to play</div>
-        <div class="muted">
-          Use arrow keys or WASD to move. Eat the green food to grow. Hitting the wall or your own body ends the game.
-        </div>
-
-        <div style="margin-top:12px">
-          <div class="title" style="font-size:14px">Game options</div>
-          <div class="controls" style="margin-top:8px">
-            <button id="btnPause">Pause / Resume</button>
-            <button id="btnRestart" class="danger">Restart (R)</button>
-            <button id="btnEasy">Easy</button>
-            <button id="btnHard">Hard</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="title">Tips</div>
-        <ul class="muted" style="margin:6px 0 0 18px; padding:0">
-          <li>Plan turns; don't trap your head in your body.</li>
-          <li>Try circling the edges early to gather space.</li>
-          <li>Mobile: swipe in the direction you want to move.</li>
-        </ul>
-      </div>
-
-      <div class="panel center big">
-        <div style="font-weight:800; font-size:18px" id="message">Good luck!</div>
-        <div class="muted" style="font-size:13px">Press any arrow / WASD to start</div>
-      </div>
-
-      <div class="footer muted center" style="padding-top:8px">Made by GPT — open, tweak, have fun!</div>
-    </div>
-  </div>
-
-<script>
-/*
-  Snake game — single-file
-  - Responsive canvas (square)
-  - Fixed timestep with accumulator for consistent speed
-  - localStorage high score
-  - Touch swipe detection
-*/
-
-(() => {
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d', { alpha: false });
-  const scoreEl = document.getElementById('score');
-  const hiEl = document.getElementById('hi');
-  const speedPill = document.getElementById('speedPill');
-  const statePill = document.getElementById('statePill');
-  const messageEl = document.getElementById('message');
-  const touchArea = document.getElementById('touch-area');
-
-  // Game settings
-  const GRID = 20; // number of cells per row/column (square grid)
-  const baseSpeed = 6; // updates per second initial
-  const speedIncreasePerFood = 0.35; // how much speed increases per food
-  const maxSpeed = 25;
-
-  // Canvas drawing scale: compute tile size based on canvas pixel size
-  function tileSize() {
-    return Math.floor(Math.min(canvas.width, canvas.height) / GRID);
-  }
-
-  // Utilities
-  function randInt(min, maxInclusive) {
-    return Math.floor(Math.random() * (maxInclusive - min + 1)) + min;
-  }
-
-  function clonePos(p){ return {x:p.x, y:p.y}; }
-  function posEqual(a,b){ return a.x===b.x && a.y===b.y; }
-
-  // Game state
-  let snake = [];
-  let dir = {x:1, y:0}; // initial moving right
-  let nextDir = null;
-  let food = {x:0, y:0};
-  let score = 0;
-  let high = 0;
-  let speed = baseSpeed;
-  let running = false;
-  let lastTick = performance.now();
-  let acc = 0;
-  let gameOver = false;
-  let msgTimeout = null;
-
-  // High score from localStorage
-  try {
-    const s = localStorage.getItem('snake_high_v1');
-    high = s ? parseInt(s,10) : 0;
-  } catch(e){ high = 0; }
-  hiEl.textContent = high;
-
-  // initialize or reset
-  function reset(initSpeed = baseSpeed) {
-    snake = [];
-    const center = Math.floor(GRID/2);
-    snake.push({x:center-1,y:center});
-    snake.push({x:center,y:center});
-    snake.push({x:center+1,y:center});
-    dir = {x:1,y:0};
-    nextDir = null;
-    score = 0;
-    speed = initSpeed;
-    running = false;
-    gameOver = false;
-    placeFood();
-    updateHUD();
-    statePill.textContent = 'Paused';
-    message('Press an arrow / WASD to start', 4000);
-  }
-
-  function updateHUD(){
-    scoreEl.textContent = 'Score: ' + score;
-    speedPill.textContent = 'Speed: ' + Math.round(speed);
-    hiEl.textContent = high;
-  }
-
-  function placeFood(){
-    // place food in a random cell not overlapping the snake
-    let tries = 0;
-    while(true){
-      const x = randInt(0, GRID-1);
-      const y = randInt(0, GRID-1);
-      const collision = snake.some(s => s.x===x && s.y===y);
-      if(!collision){ food = {x,y}; return; }
-      if(++tries > 1000) { // fallback: scan for empty
-        const cells = [];
-        for(let i=0;i<GRID;i++) for(let j=0;j<GRID;j++){
-          if(!snake.some(s=>s.x===i&&s.y===j)) cells.push({x:i,y:j});
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Snake Game with RGB Color Wheel</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        if(cells.length) { food = cells[randInt(0,cells.length-1)]; return; }
-        food = {x:0,y:0}; return;
-      }
-    }
-  }
 
-  function setMessage(txt, time=0){
-    messageEl.textContent = txt;
-    if(msgTimeout) clearTimeout(msgTimeout);
-    if(time>0) msgTimeout = setTimeout(()=>{ messageEl.textContent=''; msgTimeout=null }, time);
-  }
-  function message(txt, time=0){ setMessage(txt, time); }
+        :root {
+            --bg-primary: #1a2a6c;
+            --bg-secondary: #b21f1f;
+            --bg-tertiary: #fdbb2d;
+            --bg-type: 'gradient';
+        }
 
-  // Input
-  const keyDir = {
-    'ArrowUp': {x:0,y:-1}, 'ArrowDown': {x:0,y:1}, 'ArrowLeft': {x:-1,y:0}, 'ArrowRight': {x:1,y:0},
-    'w': {x:0,y:-1}, 's': {x:0,y:1}, 'a': {x:-1,y:0}, 'd': {x:1,y:0},
-    'W': {x:0,y:-1}, 'S': {x:0,y:1}, 'A': {x:-1,y:0}, 'D': {x:1,y:0},
-  };
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary), var(--bg-tertiary));
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            transition: background 0.5s ease;
+        }
 
-  function handleDirectionInput(newDir){
-    if(!newDir) return;
-    // prevent reversing into yourself
-    if(newDir.x === -dir.x && newDir.y === -dir.y) return;
-    // queue next dir for next update (avoid multiple changes in a tick)
-    nextDir = newDir;
-    // if not running, start
-    if(!running && !gameOver) {
-      running = true;
-      statePill.textContent = 'Running';
-      message('');
-    }
-  }
+        body.solid-bg {
+            background: var(--bg-primary) !important;
+        }
 
-  window.addEventListener('keydown', (e) => {
-    if(e.key === ' '){ togglePause(); e.preventDefault(); return; }
-    if(e.key === 'r' || e.key === 'R'){ restart(); return; }
-    const kd = keyDir[e.key];
-    if(kd){ handleDirectionInput(kd); e.preventDefault(); }
-  });
+        #game-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            max-width: 550px;
+            width: 100%;
+        }
 
-  // touch swipe
-  (function attachSwipe(){
-    let startX=0,startY=0,startT=0;
-    touchArea.addEventListener('touchstart', (e)=>{
-      if(e.touches.length!==1) return;
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      startT = performance.now();
-    }, {passive:true});
-    touchArea.addEventListener('touchend', (e)=>{
-      if(!startT) return;
-      const tu = e.changedTouches[0];
-      const dx = tu.clientX - startX;
-      const dy = tu.clientY - startY;
-      const dt = performance.now() - startT;
-      startT = 0;
-      // require some minimum movement
-      if(Math.hypot(dx,dy) < 20 || dt > 1000) return;
-      if(Math.abs(dx) > Math.abs(dy)){
-        handleDirectionInput({x: dx>0?1:-1, y:0});
-      } else {
-        handleDirectionInput({x:0, y: dy>0?1:-1});
-      }
-    }, {passive:true});
-  })();
+        .game-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
 
-  // Game step
-  function step(){
-    // apply queued direction
-    if(nextDir){ dir = nextDir; nextDir = null; }
+        .game-title {
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
 
-    // compute new head
-    const head = clonePos(snake[snake.length-1]);
-    head.x += dir.x;
-    head.y += dir.y;
+        .language-selector {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
 
-    // wall collision -> game over
-    if(head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID){
-      return doGameOver();
-    }
+        .lang-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            background: #3498db;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
 
-    // self collision
-    if(snake.some(seg => posEqual(seg, head))){
-      return doGameOver();
-    }
+        .lang-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+        }
 
-    // move snake
-    snake.push(head);
+        .lang-btn.active {
+            background: #e74c3c;
+            transform: scale(1.05);
+        }
 
-    // eat food?
-    if(posEqual(head, food)){
-      score += 1;
-      // increase speed a bit
-      speed = Math.min(maxSpeed, speed + speedIncreasePerFood);
-      placeFood();
-      updateHUD();
-    } else {
-      // remove tail
-      snake.shift();
-    }
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #ecf0f1;
+            border-radius: 10px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
 
-    // update HUD every step
-    updateHUD();
-  }
+        .game-board {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            background: #2c3e50;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+        }
 
-  function doGameOver(){
-    running = false;
-    gameOver = true;
-    statePill.textContent = 'Game Over';
-    // update high
-    if(score > high){
-      high = score;
-      try { localStorage.setItem('snake_high_v1', String(high)); } catch(e){}
-      hiEl.textContent = high;
-      message('New high score! Press R to restart', 6000);
-    } else {
-      message('Game Over — Press R to restart', 6000);
-    }
-  }
+        .grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            grid-template-rows: repeat(20, 1fr);
+        }
 
-  function togglePause(){
-    if(gameOver) return;
-    running = !running;
-    statePill.textContent = running ? 'Running' : 'Paused';
-    message(running ? '' : 'Paused', 1500);
-  }
+        .snake-segment {
+            background: #27ae60;
+            border: 1px solid #2c3e50;
+            border-radius: 2px;
+            transition: all 0.1s ease;
+        }
 
-  function restart(){
-    reset(baseSpeed);
-    lastTick = performance.now();
-    acc = 0;
-    running = false;
-    gameOver = false;
-    statePill.textContent = 'Paused';
-    message('Press arrow / WASD to start', 3000);
-  }
+        .snake-head {
+            background: #2ecc71;
+            border-radius: 4px;
+            box-shadow: 0 0 10px #2ecc71;
+        }
 
-  // main loop (requestAnimationFrame + fixed update)
-  function loop(now){
-    requestAnimationFrame(loop);
-    const secPerUpdate = 1 / Math.max(1, speed); // updates per second depends on speed
-    const msPerUpdate = secPerUpdate * 1000;
+        .food {
+            background: #e74c3c;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+            box-shadow: 0 0 15px #e74c3c;
+        }
 
-    let dt = now - lastTick;
-    lastTick = now;
-    acc += dt;
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
 
-    // cap accumulator to avoid spiral of death after tab switch
-    if(acc > 200) acc = 200;
+        .game-controls {
+            margin-top: 20px;
+            text-align: center;
+        }
 
-    while(acc >= msPerUpdate){
-      acc -= msPerUpdate;
-      if(running && !gameOver) step();
-    }
+        .control-btn {
+            padding: 12px 30px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 25px;
+            background: #9b59b6;
+            color: white;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
 
-    // draw
-    draw();
-  }
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+        }
 
-  // Drawing utilities
-  function drawGrid(){
-    const t = tileSize();
-    ctx.fillStyle = '#071526';
-    ctx.fillRect(0,0,canvas.width, canvas.height);
+        .control-btn:active {
+            transform: translateY(0);
+        }
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.02)';
-    ctx.lineWidth = 1;
-    for(let i=0;i<=GRID;i++){
-      const pos = i*t + 0.5;
-      // vertical
-      ctx.beginPath();
-      ctx.moveTo(pos, 0);
-      ctx.lineTo(pos, GRID*t);
-      ctx.stroke();
-      // horizontal
-      ctx.beginPath();
-      ctx.moveTo(0, pos);
-      ctx.lineTo(GRID*t, pos);
-      ctx.stroke();
-    }
-  }
+        .mobile-controls {
+            display: none;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+            aspect-ratio: 1;
+            max-width: 300px;
+            margin-left: auto;
+            margin-right: auto;
+        }
 
-  function drawRoundedRect(x,y,w,h,r){
-    ctx.beginPath();
-    ctx.moveTo(x+r, y);
-    ctx.arcTo(x+w, y, x+w, y+h, r);
-    ctx.arcTo(x+w, y+h, x, y+h, r);
-    ctx.arcTo(x, y+h, x, y, r);
-    ctx.arcTo(x, y, x+w, y, r);
-    ctx.closePath();
-    ctx.fill();
-  }
+        .swipe-area {
+            background: rgba(52, 152, 219, 0.3);
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #2c3e50;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s ease;
+        }
 
-  function draw(){
-    // adapt canvas internal size to actual CSS size for crispness
-    const rect = canvas.getBoundingClientRect();
-    const ratio = window.devicePixelRatio || 1;
-    const w = Math.floor(rect.width * ratio);
-    const h = Math.floor(rect.height * ratio);
-    if(canvas.width !== w || canvas.height !== h){
-      canvas.width = w;
-      canvas.height = h;
-      ctx.setTransform(ratio,0,0,ratio,0,0); // keep drawing coordinates in CSS pixels
-    }
+        .swipe-area:active {
+            background: rgba(52, 152, 219, 0.6);
+        }
 
-    const t = tileSize();
+        .game-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 1.5em;
+            font-weight: bold;
+            z-index: 10;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+        }
 
-    // background
-    drawGrid();
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            font-size: 0.9em;
+            line-height: 1.4;
+            color: #666;
+        }
 
-    // food
-    ctx.fillStyle = '#16a34a';
-    const fx = food.x * t + 1;
-    const fy = food.y * t + 1;
-    const pad = Math.max(1, t*0.08);
-    drawRoundedRect(fx+pad, fy+pad, t - 2*pad, t - 2*pad, Math.max(2,t*0.12));
+        /* Background Customization Styles */
+        .background-controls {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 2px dashed #dee2e6;
+        }
 
-    // snake body
-    // draw from tail to head for nicer layering
-    for(let i=0;i<snake.length;i++){
-      const s = snake[i];
-      const x = s.x * t + 1;
-      const y = s.y * t + 1;
+        .bg-control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
 
-      if(i === snake.length - 1){
-        // head
-        ctx.fillStyle = '#22c55e';
-        drawRoundedRect(x + 1, y + 1, t - 4, t - 4, Math.max(2,t*0.15));
-        // small eye
-        ctx.fillStyle = '#062018';
-        const hx = x + (dir.x > 0 ? t*0.65 : (dir.x < 0 ? t*0.25 : t*0.5));
-        const hy = y + (dir.y > 0 ? t*0.65 : (dir.y < 0 ? t*0.25 : t*0.35));
-        ctx.beginPath();
-        ctx.arc(hx, hy, Math.max(1,t*0.05), 0, Math.PI*2);
-        ctx.fill();
-      } else {
-        // body gradient
-        const mix = i / Math.max(1, snake.length-1);
-        // mix color between darker green and bright
-        const r = Math.round(20 + (34-20)*(1-mix));
-        const g = Math.round(60 + (197-60)*(1-mix));
-        const b = Math.round(46 + (94-46)*(1-mix));
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-        drawRoundedRect(x+2, y+2, t-6, t-6, Math.max(2,t*0.12));
-      }
-    }
+        .bg-toggle {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
 
-    // overlay HUD / messages handled by DOM, no need to draw
-  }
+        .bg-type-btn {
+            padding: 8px 16px;
+            border: 2px solid #6c757d;
+            border-radius: 20px;
+            background: white;
+            color: #6c757d;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
 
-  // initial setup
-  reset(baseSpeed);
-  updateHUD();
-  lastTick = performance.now();
-  requestAnimationFrame(loop);
+        .bg-type-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
 
-  // buttons
-  document.getElementById('btnPause').addEventListener('click', togglePause);
-  document.getElementById('btnRestart').addEventListener('click', restart);
-  document.getElementById('btnEasy').addEventListener('click', ()=>{
-    speed = 4; reset(speed); message('Easy mode', 1600);
-  });
-  document.getElementById('btnHard').addEventListener('click', ()=>{
-    speed = 10; reset(speed); message('Hard mode', 1600);
-  });
+        .color-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
 
-  // allow clicking canvas to toggle pause
-  canvas.addEventListener('click', ()=>{ togglePause(); });
+        .color-picker-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
 
-  // start message
-  message('Press an arrow / WASD to start', 5000);
-})();
-</script>
+        .color-label {
+            font-weight: bold;
+            color: #495057;
+            font-size: 0.9em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .color-input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .color-preview {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .color-preview:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .color-preview::after {
+            content: '🎨';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2em;
+            opacity: 0.8;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .color-input-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .hex-input {
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            font-size: 0.9em;
+            width: 100%;
+        }
+
+        .rgb-inputs {
+            display: flex;
+            gap: 5px;
+        }
+
+        .rgb-input {
+            flex: 1;
+            padding: 6px;
+            border: 1px solid #ced4da;
+            border-radius: 3px;
+            font-size: 0.8em;
+            text-align: center;
+        }
+
+        .rgb-label {
+            font-size: 0.7em;
+            color: #6c757d;
+            text-align: center;
+            margin-top: 2px;
+        }
+
+        /* RGB Color Wheel Styles */
+        .color-wheel-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .color-wheel-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .color-wheel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .color-wheel-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .close-wheel {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .color-wheel-main {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .wheel-and-sliders {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .color-wheel-visual {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: conic-gradient(
+                from 0deg,
+                #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000
+            );
+            position: relative;
+            cursor: crosshair;
+            border: 3px solid #fff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .color-wheel-selector {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+
+        .rgb-sliders {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9em;
+            color: #495057;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .slider-value {
+            width: 30px;
+            text-align: center;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .rgb-slider {
+            flex: 1;
+            height: 8px;
+            border-radius: 4px;
+            background: linear-gradient(to right, 
+                rgb(0, var(--g), var(--b)), 
+                rgb(255, var(--g), var(--b))
+            );
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .green-slider {
+            background: linear-gradient(to right, 
+                rgb(var(--r), 0, var(--b)), 
+                rgb(var(--r), 255, var(--b))
+            );
+        }
+
+        .blue-slider {
+            background: linear-gradient(to right, 
+                rgb(var(--r), var(--g), 0), 
+                rgb(var(--r), var(--g), 255)
+            );
+        }
+
+        .rgb-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid #3498db;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .rgb-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid #3498db;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .current-color-preview {
+            height: 60px;
+            border-radius: 10px;
+            border: 2px solid #dee2e6;
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+
+        .color-wheel-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .wheel-action-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .apply-color {
+            background: #27ae60;
+            color: white;
+        }
+
+        .cancel-color {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .preset-themes {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .theme-btn {
+            aspect-ratio: 1;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .theme-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .theme-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: inherit;
+            border-radius: 8px;
+        }
+
+        .theme-btn.gradient::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.3) 100%);
+            border-radius: 8px;
+        }
+
+        .bg-preview {
+            height: 60px;
+            border-radius: 10px;
+            margin-top: 10px;
+            border: 2px solid #dee2e6;
+            background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary), var(--bg-tertiary));
+            transition: all 0.3s ease;
+        }
+
+        .solid-bg .bg-preview {
+            background: var(--bg-primary) !important;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-controls {
+                display: grid;
+            }
+            
+            #game-container {
+                padding: 15px;
+            }
+            
+            .game-title {
+                font-size: 2em;
+            }
+            
+            .preset-themes {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .wheel-and-sliders {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .color-wheel-visual {
+                width: 150px;
+                height: 150px;
+            }
+        }
+    </style>
+</head>
+<body :class="{ 'solid-bg': backgroundType === 'solid' }">
+    <div id="app">
+        <div id="game-container">
+            <div class="game-header">
+                <h1 class="game-title">{{ texts.title }}</h1>
+                
+                <div class="language-selector">
+                    <button 
+                        v-for="lang in languages" 
+                        :key="lang.code"
+                        @click="changeLanguage(lang.code)"
+                        :class="['lang-btn', { active: currentLanguage === lang.code }]"
+                    >
+                        {{ lang.name }}
+                    </button>
+                </div>
+            </div>
+
+            <div class="game-info">
+                <div>{{ texts.score }}: {{ score }}</div>
+                <div>{{ texts.highScore }}: {{ highScore }}</div>
+            </div>
+
+            <div class="game-board" @touchstart="handleTouchStart" @touchmove="handleTouchMove">
+                <div class="grid">
+                    <div 
+                        v-for="cell in gridCells" 
+                        :key="cell.id"
+                        :class="getCellClass(cell)"
+                    ></div>
+                </div>
+                
+                <div v-if="gameOver" class="game-message">
+                    <div>{{ texts.gameOver }}</div>
+                    <div style="margin-top: 10px; font-size: 0.8em;">
+                        {{ texts.finalScore }}: {{ score }}
+                    </div>
+                    <button class="control-btn" @click="startGame" style="margin-top: 15px;">
+                        {{ texts.playAgain }}
+                    </button>
+                </div>
+                
+                <div v-else-if="!gameStarted" class="game-message">
+                    <div>{{ texts.welcome }}</div>
+                    <button class="control-btn" @click="startGame" style="margin-top: 15px;">
+                        {{ texts.startGame }}
+                    </button>
+                </div>
+            </div>
+
+            <div class="game-controls">
+                <button class="control-btn" @click="startGame" v-if="gameStarted && !gameOver">
+                    {{ texts.restart }}
+                </button>
+                <button class="control-btn" @click="pauseGame" v-if="gameStarted && !gameOver">
+                    {{ isPaused ? texts.resume : texts.pause }}
+                </button>
+            </div>
+
+            <div class="mobile-controls">
+                <div class="swipe-area"></div>
+                <div class="swipe-area" @click="changeDirection('up')">↑</div>
+                <div class="swipe-area"></div>
+                <div class="swipe-area" @click="changeDirection('left')">←</div>
+                <div class="swipe-area" style="background: rgba(231, 76, 60, 0.3);">●</div>
+                <div class="swipe-area" @click="changeDirection('right')">→</div>
+                <div class="swipe-area"></div>
+                <div class="swipe-area" @click="changeDirection('down')">↓</div>
+                <div class="swipe-area"></div>
+            </div>
+
+            <!-- Enhanced Background Controls with RGB Color Wheel -->
+            <div class="background-controls">
+                <div class="bg-control-header">
+                    <h3 style="margin: 0; color: #495057;">{{ texts.backgroundCustomization }}</h3>
+                    <button class="control-btn" @click="resetBackground" style="padding: 8px 16px; font-size: 0.9em;">
+                        {{ texts.resetBackground }}
+                    </button>
+                </div>
+
+                <div class="bg-toggle">
+                    <button 
+                        @click="setBackgroundType('gradient')" 
+                        :class="['bg-type-btn', { active: backgroundType === 'gradient' }]"
+                    >
+                        {{ texts.gradientBackground }}
+                    </button>
+                    <button 
+                        @click="setBackgroundType('solid')" 
+                        :class="['bg-type-btn', { active: backgroundType === 'solid' }]"
+                    >
+                        {{ texts.solidBackground }}
+                    </button>
+                </div>
+
+                <div class="color-controls">
+                    <!-- Primary Color -->
+                    <div class="color-picker-group">
+                        <label class="color-label">
+                            {{ texts.primaryColor }}
+                            <span style="font-weight: normal; font-size: 0.8em; color: #6c757d;">
+                                RGB({{ currentRgb.primary.r }}, {{ currentRgb.primary.g }}, {{ currentRgb.primary.b }})
+                            </span>
+                        </label>
+                        <div class="color-input-group">
+                            <div 
+                                class="color-preview" 
+                                :style="{ backgroundColor: colors.primary }"
+                                @click="openColorWheel('primary')"
+                            ></div>
+                            <div class="color-input-container">
+                                <input 
+                                    type="text" 
+                                    class="hex-input" 
+                                    v-model="colors.primary" 
+                                    @input="updateColorFromHex('primary', $event.target.value)"
+                                    placeholder="#1a2a6c"
+                                    maxlength="7"
+                                >
+                                <div class="rgb-inputs">
+                                    <div>
+                                        <input 
+                                            type="number" 
+                                            class="rgb-input" 
+                                            min="0" 
+                                            max="255" 
+                                            v-model="currentRgb.primary.r"
+                                            @input="updateColorFromRgb('primary')"
+                                        >
+                                        <div class="rgb-label">R</div>
+                                    </div>
+                                    <div>
+                                        <input 
+                                            type="number" 
+                                            class="rgb-input" 
+                                            min="0" 
+                                            max="255" 
+                                            v-model="currentRgb.primary.g"
+                                            @input="updateColorFromRgb('primary')"
+                                        >
+                                        <div class="rgb-label">G</div>
+                                    </div>
+                                    <div>
+                                        <input 
+                                            type="number" 
+                                            class="rgb-input" 
+                                            min="0" 
+                                            max="255" 
+                                            v-model="currentRgb.primary.b"
+                                            @input="updateColorFromRgb('primary')"
+                                        >
+                                        <div class="rgb-label">B</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Secondary Color (Only show for gradient) -->
+                    <div class="color-picker-group" v-if="backgroundType === 'gradient'">
+                        <label class="color-label">
+                            {{ texts.secondaryColor }}
+                            <span style="font-weight: normal; font-size: 0.8em; color: #6c757d;">
+                                RGB({{ currentRgb.secondary.r }}, {{ currentRgb.secondary.g }}, {{ currentRgb.secondary.b }})
+                            </span>
+                        </label>
+                        <div class="color-input-group">
+                            <div 
+                                class="color-preview" 
+                                :style="{ backgroundColor: colors.secondary }"
+                                @click="openColorWheel('secondary')"
+                            ></div>
+                            <div class="color-input-container">
+                                <input 
+                                    type="text" 
+                                    class="hex-input" 
+                                    v-model="colors.secondary" 
+                                    @input="updateColorFromHex('secondary', $event.target.value)"
+                                    placeholder="#b21f1f"
+                                    maxlength="7"
+                                >
+                                <div class="rgb-inputs">
+                                    <div>
+                                        <input 
+                                            type="number" 
+                                            class="rgb-input" 
+                                            min="0" 
+                                            max="255" 
+                                            v-model="currentRgb.secondary.r"
+                                            @input="updateColorFromRgb('secondary')"
+                                        >
+                                        <div class="rgb-label">R</div>
+                                    </div>
+                                    <div>
+                                        <input 
+                                            type="number" 
+                                            class="rgb-input" 
+                                            min="0" 
+                                            max="255" 
+                                            v-model="currentRgb.secondary.g"
+                                            @input="updateColorFromRgb('secondary')"
+                                        >
+                                        <div class="rgb-label">G</div>
+                                    </div>
+                                    <div>
+                                        <input 
+                                            type="number" 
+                                            class="rgb-input" 
+                                            min="0" 
+                                            max="255" 
+                                            v-model="currentRgb.secondary.b"
+                                            @input="updateColorFromRgb('secondary')"
+                                        >
+                                        <div class="rgb-label">B</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tertiary Color (Only show for gradient) -->
+                    <div class="color-picker-group" v-if="backgroundType === 'gradient'">
+                        <label class="color-label">
+                            {{ texts.tertiaryColor }}
+                            <span style="font-weight: normal; font-size: 0.8em; color: #6c757d;">
+                                RGB({{ currentRgb.tertiary.r }}, {{ currentRgb.tertiary.g }}, {{ currentRgb.tertiary.b }})
+                            </span>
+                        </label>
+                        <div class="color-input-group">
+                            <div 
+                                class="color-preview" 
+                                :style="{ backgroundColor: colors.tertiary }"
+                                @click="openColorWheel('tertiary')"
+                            ></div>
+                            <div class="color-input-container">
+                                <input 
+                                    type="text" 
+                                    class="hex-input" 
+                                    v-model="colors.tertiary" 
+                                    @input="updateColorFromHex('tertiary', $event.target.value)"
+                                    placeholder="#fdbb2d"
+                                    maxlength="7"
+                                >
+                                <div class="rgb-inputs">
+                                    <div>
+                                        <input 
+                                            type="number" 
+                                            class="rgb-input" 
+                                            min="0" 
+                                            max="255" 
+                                            v-model="currentRgb.tertiary.r"
+                                            @input="updateColorFromRgb('tertiary')"
+                                        >
+                                        <div class="rgb-label">R</div>
+                                    </div>
+                                    <div>
+                                        <input 
+                                            type="number" 
+                                            class="rgb-input" 
+                                            min="0" 
+                                            max="255" 
+                                            v-model="currentRgb.tertiary.g"
+                                            @input="updateColorFromRgb('tertiary')"
+                                        >
+                                        <div class="rgb-label">G</div>
+                                    </div>
+                                    <div>
+                                        <input 
+                                            type="number" 
+                                            class="rgb-input" 
+                                            min="0" 
+                                            max="255" 
+                                            v-model="currentRgb.tertiary.b"
+                                            @input="updateColorFromRgb('tertiary')"
+                                        >
+                                        <div class="rgb-label">B</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-preview" :style="getBackgroundStyle()"></div>
+
+                <h4 style="margin: 15px 0 10px 0; color: #495057;">{{ texts.presetThemes }}</h4>
+                <div class="preset-themes">
+                    <button 
+                        v-for="theme in presetThemes" 
+                        :key="theme.name"
+                        :class="['theme-btn', { 'gradient': theme.type === 'gradient' }]"
+                        :style="getThemeStyle(theme)"
+                        @click="applyPresetTheme(theme)"
+                        :title="theme.name"
+                    ></button>
+                </div>
+            </div>
+
+            <!-- RGB Color Wheel Modal -->
+            <div v-if="showColorWheel" class="color-wheel-overlay" @click.self="closeColorWheel">
+                <div class="color-wheel-container">
+                    <div class="color-wheel-header">
+                        <div class="color-wheel-title">
+                            {{ texts.selectColor }} - {{ texts[activeColorType + 'Color'] }}
+                        </div>
+                        <button class="close-wheel" @click="closeColorWheel">×</button>
+                    </div>
+                    
+                    <div class="color-wheel-main">
+                        <div class="wheel-and-sliders">
+                            <div class="color-wheel-visual" 
+                                 @mousedown="startColorSelection"
+                                 @mousemove="updateColorSelection"
+                                 @mouseup="stopColorSelection"
+                                 @touchstart="startColorSelection"
+                                 @touchmove="updateColorSelection"
+                                 @touchend="stopColorSelection"
+                                 :style="{
+                                    '--r': wheelRgb.r,
+                                    '--g': wheelRgb.g,
+                                    '--b': wheelRgb.b
+                                 }">
+                                <div class="color-wheel-selector" 
+                                     :style="{
+                                         left: wheelSelector.x + 'px',
+                                         top: wheelSelector.y + 'px'
+                                     }"></div>
+                            </div>
+                            
+                            <div class="rgb-sliders">
+                                <div class="slider-group">
+                                    <div class="slider-label">
+                                        <span>Red</span>
+                                        <span>{{ wheelRgb.r }}</span>
+                                    </div>
+                                    <div class="slider-container">
+                                        <input type="range" 
+                                               class="rgb-slider red-slider"
+                                               min="0" 
+                                               max="255" 
+                                               v-model="wheelRgb.r"
+                                               @input="updateColorFromWheelSliders">
+                                        <span class="slider-value">{{ wheelRgb.r }}</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="slider-group">
+                                    <div class="slider-label">
+                                        <span>Green</span>
+                                        <span>{{ wheelRgb.g }}</span>
+                                    </div>
+                                    <div class="slider-container">
+                                        <input type="range" 
+                                               class="rgb-slider green-slider"
+                                               min="0" 
+                                               max="255" 
+                                               v-model="wheelRgb.g"
+                                               @input="updateColorFromWheelSliders">
+                                        <span class="slider-value">{{ wheelRgb.g }}</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="slider-group">
+                                    <div class="slider-label">
+                                        <span>Blue</span>
+                                        <span>{{ wheelRgb.b }}</span>
+                                    </div>
+                                    <div class="slider-container">
+                                        <input type="range" 
+                                               class="rgb-slider blue-slider"
+                                               min="0" 
+                                               max="255" 
+                                               v-model="wheelRgb.b"
+                                               @input="updateColorFromWheelSliders">
+                                        <span class="slider-value">{{ wheelRgb.b }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="current-color-preview" :style="{ backgroundColor: wheelColorHex }">
+                            {{ wheelColorHex }}
+                        </div>
+                        
+                        <div class="color-wheel-actions">
+                            <button class="wheel-action-btn cancel-color" @click="closeColorWheel">
+                                {{ texts.cancel }}
+                            </button>
+                            <button class="wheel-action-btn apply-color" @click="applyColorFromWheel">
+                                {{ texts.applyColor }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="instructions">
+                <p><strong>{{ texts.controls }}:</strong> {{ texts.controlsDesktop }}</p>
+                <p><strong>{{ texts.controlsMobile }}:</strong> {{ texts.controlsMobileDesc }}</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, onUnmounted, watch } = Vue;
+        
+        createApp({
+            setup() {
+                // Game state
+                const gameStarted = ref(false);
+                const gameOver = ref(false);
+                const isPaused = ref(false);
+                const score = ref(0);
+                const highScore = ref(0);
+                const currentDirection = ref('right');
+                const nextDirection = ref('right');
+                
+                // Snake and food
+                const snake = ref([{x: 10, y: 10}]);
+                const food = ref({x: 5, y: 5});
+                
+                // Game settings
+                const gridSize = 20;
+                const gameSpeed = 150;
+                let gameInterval = null;
+                
+                // Language support
+                const currentLanguage = ref('en');
+                
+                const languages = [
+                    { code: 'en', name: 'English' },
+                    { code: 'hu', name: 'Magyar' },
+                    { code: 'de', name: 'Deutsch' }
+                ];
+                
+                const translations = {
+                    en: {
+                        title: 'Snake Game',
+                        score: 'Score',
+                        highScore: 'High Score',
+                        startGame: 'Start Game',
+                        restart: 'Restart',
+                        pause: 'Pause',
+                        resume: 'Resume',
+                        gameOver: 'Game Over!',
+                        finalScore: 'Final Score',
+                        playAgain: 'Play Again',
+                        welcome: 'Welcome to Snake Game!',
+                        controls: 'Controls',
+                        controlsDesktop: 'Use WASD or Arrow Keys to move',
+                        controlsMobile: 'Mobile Controls',
+                        controlsMobileDesc: 'Swipe on game area or use directional buttons',
+                        backgroundCustomization: 'Background Customization',
+                        resetBackground: 'Reset Background',
+                        gradientBackground: 'Gradient',
+                        solidBackground: 'Solid Color',
+                        primaryColor: 'Primary Color',
+                        secondaryColor: 'Secondary Color',
+                        tertiaryColor: 'Tertiary Color',
+                        presetThemes: 'Preset Themes',
+                        selectColor: 'Select Color',
+                        applyColor: 'Apply Color',
+                        cancel: 'Cancel'
+                    },
+                    hu: {
+                        title: 'Kígyó Játék',
+                        score: 'Pontszám',
+                        highScore: 'Rekord',
+                        startGame: 'Játék Indítása',
+                        restart: 'Újraindítás',
+                        pause: 'Szünet',
+                        resume: 'Folytatás',
+                        gameOver: 'Játék Vége!',
+                        finalScore: 'Végső Pontszám',
+                        playAgain: 'Új Játék',
+                        welcome: 'Üdvözöljük a Kígyó Játékban!',
+                        controls: 'Irányítás',
+                        controlsDesktop: 'Használd a WASD vagy Nyíl billentyűket a mozgáshoz',
+                        controlsMobile: 'Mobil Irányítás',
+                        controlsMobileDesc: 'Swipe a játékterületen vagy használd az iránygombokat',
+                        backgroundCustomization: 'Háttér Testreszabás',
+                        resetBackground: 'Háttér Visszaállítás',
+                        gradientBackground: 'Áttetsző',
+                        solidBackground: 'Egyszínű',
+                        primaryColor: 'Elsődleges Szín',
+                        secondaryColor: 'Másodlagos Szín',
+                        tertiaryColor: 'Harmadlagos Szín',
+                        presetThemes: 'Előre Beállított Témák',
+                        selectColor: 'Szín Választás',
+                        applyColor: 'Alkalmaz',
+                        cancel: 'Mégse'
+                    },
+                    de: {
+                        title: 'Schlangen Spiel',
+                        score: 'Punkte',
+                        highScore: 'Highscore',
+                        startGame: 'Spiel Starten',
+                        restart: 'Neustart',
+                        pause: 'Pause',
+                        resume: 'Weiter',
+                        gameOver: 'Spiel Vorbei!',
+                        finalScore: 'Endpunktzahl',
+                        playAgain: 'Nochmal Spielen',
+                        welcome: 'Willkommen beim Schlangen Spiel!',
+                        controls: 'Steuerung',
+                        controlsDesktop: 'Benutze WASD oder Pfeiltasten zum Bewegen',
+                        controlsMobile: 'Mobile Steuerung',
+                        controlsMobileDesc: 'Wische über das Spielfeld oder benutze die Richtungstasten',
+                        backgroundCustomization: 'Hintergrund Anpassung',
+                        resetBackground: 'Hintergrund Zurücksetzen',
+                        gradientBackground: 'Verlauf',
+                        solidBackground: 'Einfarbig',
+                        primaryColor: 'Primärfarbe',
+                        secondaryColor: 'Sekundärfarbe',
+                        tertiaryColor: 'Tertiärfarbe',
+                        presetThemes: 'Voreingestelle Themen',
+                        selectColor: 'Farbe Auswählen',
+                        applyColor: 'Übernehmen',
+                        cancel: 'Abbrechen'
+                    }
+                };
+                
+                const texts = computed(() => translations[currentLanguage.value]);
+                
+                // Background customization
+                const backgroundType = ref('gradient');
+                const colors = ref({
+                    primary: '#1a2a6c',
+                    secondary: '#b21f1f',
+                    tertiary: '#fdbb2d'
+                });
+                
+                // RGB values for each color
+                const currentRgb = ref({
+                    primary: { r: 26, g: 42, b: 108 },
+                    secondary: { r: 178, g: 31, b: 31 },
+                    tertiary: { r: 253, g: 187, b: 45 }
+                });
+                
+                // Color wheel state
+                const showColorWheel = ref(false);
+                const activeColorType = ref('primary');
+                const wheelRgb = ref({ r: 26, g: 42, b: 108 });
+                const wheelSelector = ref({ x: 100, y: 100 });
+                const isSelectingColor = ref(false);
+                
+                const wheelColorHex = computed(() => {
+                    return rgbToHex(wheelRgb.value.r, wheelRgb.value.g, wheelRgb.value.b);
+                });
+                
+                const presetThemes = [
+                    { name: 'Ocean Blue', type: 'gradient', primary: '#1a2a6c', secondary: '#2a3a7c', tertiary: '#3a4a8c' },
+                    { name: 'Sunset', type: 'gradient', primary: '#ff6b6b', secondary: '#556270', tertiary: '#ff6b6b' },
+                    { name: 'Forest', type: 'gradient', primary: '#2e8b57', secondary: '#3cb371', tertiary: '#90ee90' },
+                    { name: 'Purple Dream', type: 'gradient', primary: '#667eea', secondary: '#764ba2', tertiary: '#f093fb' },
+                    { name: 'Fire', type: 'gradient', primary: '#ff4e50', secondary: '#f9d423', tertiary: '#fc913a' },
+                    { name: 'Ice', type: 'gradient', primary: '#74b9ff', secondary: '#0984e3', tertiary: '#00cec9' },
+                    { name: 'Classic Green', type: 'solid', primary: '#27ae60', secondary: '#27ae60', tertiary: '#27ae60' },
+                    { name: 'Deep Purple', type: 'solid', primary: '#6c5ce7', secondary: '#6c5ce7', tertiary: '#6c5ce7' }
+                ];
+                
+                // Utility functions for color conversion
+                function hexToRgb(hex) {
+                    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                    return result ? {
+                        r: parseInt(result[1], 16),
+                        g: parseInt(result[2], 16),
+                        b: parseInt(result[3], 16)
+                    } : { r: 0, g: 0, b: 0 };
+                }
+                
+                function rgbToHex(r, g, b) {
+                    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+                }
+                
+                function componentToHex(c) {
+                    const hex = c.toString(16);
+                    return hex.length == 1 ? "0" + hex : hex;
+                }
+                
+                // Touch handling for mobile
+                let touchStartX = 0;
+                let touchStartY = 0;
+                
+                const handleTouchStart = (event) => {
+                    touchStartX = event.touches[0].clientX;
+                    touchStartY = event.touches[0].clientY;
+                };
+                
+                const handleTouchMove = (event) => {
+                    if (!touchStartX || !touchStartY || !gameStarted.value || gameOver.value || isPaused.value) {
+                        return;
+                    }
+                    
+                    event.preventDefault();
+                    
+                    const touchEndX = event.touches[0].clientX;
+                    const touchEndY = event.touches[0].clientY;
+                    
+                    const diffX = touchStartX - touchEndX;
+                    const diffY = touchStartY - touchEndY;
+                    
+                    // Determine primary swipe direction
+                    if (Math.abs(diffX) > Math.abs(diffY)) {
+                        // Horizontal swipe
+                        if (diffX > 0 && currentDirection.value !== 'right') {
+                            changeDirection('left');
+                        } else if (diffX < 0 && currentDirection.value !== 'left') {
+                            changeDirection('right');
+                        }
+                    } else {
+                        // Vertical swipe
+                        if (diffY > 0 && currentDirection.value !== 'down') {
+                            changeDirection('up');
+                        } else if (diffY < 0 && currentDirection.value !== 'up') {
+                            changeDirection('down');
+                        }
+                    }
+                    
+                    touchStartX = 0;
+                    touchStartY = 0;
+                };
+                
+                // Generate grid cells
+                const gridCells = computed(() => {
+                    const cells = [];
+                    for (let y = 0; y < gridSize; y++) {
+                        for (let x = 0; x < gridSize; x++) {
+                            cells.push({ x, y, id: `${x}-${y}` });
+                        }
+                    }
+                    return cells;
+                });
+                
+                // Get cell class based on position
+                const getCellClass = (cell) => {
+                    const classes = [];
+                    
+                    // Check if cell is part of snake
+                    const snakeIndex = snake.value.findIndex(segment => 
+                        segment.x === cell.x && segment.y === cell.y
+                    );
+                    
+                    if (snakeIndex === 0) {
+                        classes.push('snake-head');
+                    } else if (snakeIndex > 0) {
+                        classes.push('snake-segment');
+                    }
+                    
+                    // Check if cell has food
+                    if (food.value.x === cell.x && food.value.y === cell.y) {
+                        classes.push('food');
+                    }
+                    
+                    return classes;
+                };
+                
+                // Change snake direction
+                const changeDirection = (direction) => {
+                    // Prevent 180-degree turns
+                    const oppositeDirections = {
+                        'up': 'down',
+                        'down': 'up',
+                        'left': 'right',
+                        'right': 'left'
+                    };
+                    
+                    if (oppositeDirections[direction] !== currentDirection.value) {
+                        nextDirection.value = direction;
+                    }
+                };
+                
+                // Generate new food position
+                const generateFood = () => {
+                    let newFood;
+                    do {
+                        newFood = {
+                            x: Math.floor(Math.random() * gridSize),
+                            y: Math.floor(Math.random() * gridSize)
+                        };
+                    } while (snake.value.some(segment => 
+                        segment.x === newFood.x && segment.y === newFood.y
+                    ));
+                    
+                    food.value = newFood;
+                };
+                
+                // Main game loop
+                const gameLoop = () => {
+                    if (isPaused.value || gameOver.value) return;
+                    
+                    // Update direction
+                    currentDirection.value = nextDirection.value;
+                    
+                    // Calculate new head position
+                    const head = { ...snake.value[0] };
+                    
+                    switch (currentDirection.value) {
+                        case 'up': head.y = (head.y - 1 + gridSize) % gridSize; break;
+                        case 'down': head.y = (head.y + 1) % gridSize; break;
+                        case 'left': head.x = (head.x - 1 + gridSize) % gridSize; break;
+                        case 'right': head.x = (head.x + 1) % gridSize; break;
+                    }
+                    
+                    // Check collision with self
+                    if (snake.value.some((segment, index) => 
+                        index > 0 && segment.x === head.x && segment.y === head.y
+                    )) {
+                        endGame();
+                        return;
+                    }
+                    
+                    // Add new head
+                    snake.value.unshift(head);
+                    
+                    // Check if food eaten
+                    if (head.x === food.value.x && head.y === food.value.y) {
+                        score.value += 10;
+                        if (score.value > highScore.value) {
+                            highScore.value = score.value;
+                        }
+                        generateFood();
+                    } else {
+                        // Remove tail if no food eaten
+                        snake.value.pop();
+                    }
+                };
+                
+                // Start game
+                const startGame = () => {
+                    gameStarted.value = true;
+                    gameOver.value = false;
+                    isPaused.value = false;
+                    score.value = 0;
+                    snake.value = [{x: 10, y: 10}];
+                    currentDirection.value = 'right';
+                    nextDirection.value = 'right';
+                    generateFood();
+                    
+                    if (gameInterval) {
+                        clearInterval(gameInterval);
+                    }
+                    
+                    gameInterval = setInterval(gameLoop, gameSpeed);
+                };
+                
+                // Pause game
+                const pauseGame = () => {
+                    isPaused.value = !isPaused.value;
+                };
+                
+                // End game
+                const endGame = () => {
+                    gameOver.value = true;
+                    if (gameInterval) {
+                        clearInterval(gameInterval);
+                        gameInterval = null;
+                    }
+                };
+                
+                // Change language
+                const changeLanguage = (langCode) => {
+                    currentLanguage.value = langCode;
+                };
+                
+                // Background customization functions
+                const setBackgroundType = (type) => {
+                    backgroundType.value = type;
+                    updateBackground();
+                };
+                
+                const updateBackground = () => {
+                    // Update CSS custom properties
+                    document.documentElement.style.setProperty('--bg-primary', colors.value.primary);
+                    document.documentElement.style.setProperty('--bg-secondary', colors.value.secondary);
+                    document.documentElement.style.setProperty('--bg-tertiary', colors.value.tertiary);
+                    document.documentElement.style.setProperty('--bg-type', backgroundType.value);
+                    
+                    // Save to localStorage
+                    saveBackgroundSettings();
+                };
+                
+                const updateColorFromHex = (colorType, hexValue) => {
+                    if (hexValue.startsWith('#') && hexValue.length === 7) {
+                        colors.value[colorType] = hexValue;
+                        currentRgb.value[colorType] = hexToRgb(hexValue);
+                        updateBackground();
+                    }
+                };
+                
+                const updateColorFromRgb = (colorType) => {
+                    const rgb = currentRgb.value[colorType];
+                    colors.value[colorType] = rgbToHex(rgb.r, rgb.g, rgb.b);
+                    updateBackground();
+                };
+                
+                const getBackgroundStyle = () => {
+                    if (backgroundType.value === 'gradient') {
+                        return {
+                            background: `linear-gradient(135deg, ${colors.value.primary}, ${colors.value.secondary}, ${colors.value.tertiary})`
+                        };
+                    } else {
+                        return {
+                            background: colors.value.primary
+                        };
+                    }
+                };
+                
+                const getThemeStyle = (theme) => {
+                    if (theme.type === 'gradient') {
+                        return {
+                            background: `linear-gradient(135deg, ${theme.primary}, ${theme.secondary}, ${theme.tertiary})`
+                        };
+                    } else {
+                        return {
+                            background: theme.primary
+                        };
+                    }
+                };
+                
+                const applyPresetTheme = (theme) => {
+                    backgroundType.value = theme.type;
+                    colors.value.primary = theme.primary;
+                    colors.value.secondary = theme.secondary;
+                    colors.value.tertiary = theme.tertiary;
+                    
+                    // Update RGB values
+                    currentRgb.value.primary = hexToRgb(theme.primary);
+                    currentRgb.value.secondary = hexToRgb(theme.secondary);
+                    currentRgb.value.tertiary = hexToRgb(theme.tertiary);
+                    
+                    updateBackground();
+                };
+                
+                const resetBackground = () => {
+                    backgroundType.value = 'gradient';
+                    colors.value.primary = '#1a2a6c';
+                    colors.value.secondary = '#b21f1f';
+                    colors.value.tertiary = '#fdbb2d';
+                    
+                    currentRgb.value.primary = { r: 26, g: 42, b: 108 };
+                    currentRgb.value.secondary = { r: 178, g: 31, b: 31 };
+                    currentRgb.value.tertiary = { r: 253, g: 187, b: 45 };
+                    
+                    updateBackground();
+                };
+                
+                // Color Wheel Functions
+                const openColorWheel = (colorType) => {
+                    activeColorType.value = colorType;
+                    wheelRgb.value = { ...currentRgb.value[colorType] };
+                    showColorWheel.value = true;
+                };
+                
+                const closeColorWheel = () => {
+                    showColorWheel.value = false;
+                    isSelectingColor.value = false;
+                };
+                
+                const startColorSelection = (event) => {
+                    isSelectingColor.value = true;
+                    updateColorFromWheel(event);
+                };
+                
+                const updateColorSelection = (event) => {
+                    if (isSelectingColor.value) {
+                        updateColorFromWheel(event);
+                    }
+                };
+                
+                const stopColorSelection = () => {
+                    isSelectingColor.value = false;
+                };
+                
+                const updateColorFromWheel = (event) => {
+                    const wheel = event.currentTarget;
+                    const rect = wheel.getBoundingClientRect();
+                    
+                    let clientX, clientY;
+                    
+                    if (event.type.includes('touch')) {
+                        clientX = event.touches[0].clientX;
+                        clientY = event.touches[0].clientY;
+                    } else {
+                        clientX = event.clientX;
+                        clientY = event.clientY;
+                    }
+                    
+                    const x = clientX - rect.left;
+                    const y = clientY - rect.top;
+                    
+                    // Calculate angle and distance from center
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    const deltaX = x - centerX;
+                    const deltaY = y - centerY;
+                    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                    const radius = Math.min(centerX, centerY);
+                    
+                    // Normalize coordinates
+                    const normX = deltaX / radius;
+                    const normY = deltaY / radius;
+                    const normDistance = Math.min(distance / radius, 1);
+                    
+                    // Calculate hue (angle) and saturation (distance)
+                    let angle = Math.atan2(normY, normX);
+                    if (angle < 0) angle += 2 * Math.PI;
+                    
+                    const hue = angle * (180 / Math.PI);
+                    const saturation = normDistance;
+                    
+                    // Convert HSL to RGB
+                    const hslToRgb = (h, s, l) => {
+                        h /= 360;
+                        let r, g, b;
+                        
+                        if (s === 0) {
+                            r = g = b = l;
+                        } else {
+                            const hue2rgb = (p, q, t) => {
+                                if (t < 0) t += 1;
+                                if (t > 1) t -= 1;
+                                if (t < 1/6) return p + (q - p) * 6 * t;
+                                if (t < 1/2) return q;
+                                if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                                return p;
+                            };
+                            
+                            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                            const p = 2 * l - q;
+                            r = hue2rgb(p, q, h + 1/3);
+                            g = hue2rgb(p, q, h);
+                            b = hue2rgb(p, q, h - 1/3);
+                        }
+                        
+                        return {
+                            r: Math.round(r * 255),
+                            g: Math.round(g * 255),
+                            b: Math.round(b * 255)
+                        };
+                    };
+                    
+                    const rgb = hslToRgb(hue, saturation, 0.5);
+                    wheelRgb.value = rgb;
+                    
+                    // Update selector position
+                    wheelSelector.value = {
+                        x: x,
+                        y: y
+                    };
+                };
+                
+                const updateColorFromWheelSliders = () => {
+                    // Sliders already update wheelRgb directly through v-model
+                };
+                
+                const applyColorFromWheel = () => {
+                    colors.value[activeColorType.value] = wheelColorHex.value;
+                    currentRgb.value[activeColorType.value] = { ...wheelRgb.value };
+                    updateBackground();
+                    closeColorWheel();
+                };
+                
+                const saveBackgroundSettings = () => {
+                    const settings = {
+                        type: backgroundType.value,
+                        colors: colors.value,
+                        rgb: currentRgb.value
+                    };
+                    localStorage.setItem('snakeBackgroundSettings', JSON.stringify(settings));
+                };
+                
+                const loadBackgroundSettings = () => {
+                    const saved = localStorage.getItem('snakeBackgroundSettings');
+                    if (saved) {
+                        try {
+                            const settings = JSON.parse(saved);
+                            backgroundType.value = settings.type;
+                            colors.value = settings.colors;
+                            if (settings.rgb) {
+                                currentRgb.value = settings.rgb;
+                            } else {
+                                // Convert hex to RGB if RGB data doesn't exist
+                                currentRgb.value.primary = hexToRgb(settings.colors.primary);
+                                currentRgb.value.secondary = hexToRgb(settings.colors.secondary);
+                                currentRgb.value.tertiary = hexToRgb(settings.colors.tertiary);
+                            }
+                            updateBackground();
+                        } catch (e) {
+                            console.log('Error loading background settings:', e);
+                        }
+                    }
+                };
+                
+                // Keyboard controls
+                const handleKeyDown = (event) => {
+                    if (!gameStarted.value || gameOver.value || isPaused.value) return;
+                    
+                    switch (event.key.toLowerCase()) {
+                        case 'w':
+                        case 'arrowup':
+                            changeDirection('up');
+                            break;
+                        case 's':
+                        case 'arrowdown':
+                            changeDirection('down');
+                            break;
+                        case 'a':
+                        case 'arrowleft':
+                            changeDirection('left');
+                            break;
+                        case 'd':
+                        case 'arrowright':
+                            changeDirection('right');
+                            break;
+                    }
+                };
+                
+                // Initialize game
+                onMounted(() => {
+                    document.addEventListener('keydown', handleKeyDown);
+                    highScore.value = parseInt(localStorage.getItem('snakeHighScore') || '0');
+                    loadBackgroundSettings();
+                });
+                
+                onUnmounted(() => {
+                    document.removeEventListener('keydown', handleKeyDown);
+                    if (gameInterval) {
+                        clearInterval(gameInterval);
+                    }
+                });
+                
+                // Watch for high score changes to save to localStorage
+                const stopWatch = watch(highScore, (newValue) => {
+                    localStorage.setItem('snakeHighScore', newValue.toString());
+                });
+                
+                onUnmounted(() => {
+                    stopWatch();
+                });
+                
+                return {
+                    gameStarted,
+                    gameOver,
+                    isPaused,
+                    score,
+                    highScore,
+                    gridCells,
+                    getCellClass,
+                    startGame,
+                    pauseGame,
+                    changeDirection,
+                    currentLanguage,
+                    languages,
+                    texts,
+                    changeLanguage,
+                    handleTouchStart,
+                    handleTouchMove,
+                    // Background customization
+                    backgroundType,
+                    colors,
+                    currentRgb,
+                    presetThemes,
+                    setBackgroundType,
+                    updateBackground,
+                    getBackgroundStyle,
+                    getThemeStyle,
+                    applyPresetTheme,
+                    resetBackground,
+                    updateColorFromHex,
+                    updateColorFromRgb,
+                    // Color wheel
+                    showColorWheel,
+                    activeColorType,
+                    wheelRgb,
+                    wheelSelector,
+                    wheelColorHex,
+                    openColorWheel,
+                    closeColorWheel,
+                    startColorSelection,
+                    updateColorSelection,
+                    stopColorSelection,
+                    updateColorFromWheelSliders,
+                    applyColorFromWheel
+                };
+            }
+        }).mount('#app');
+    </script>
 </body>
 </html>
